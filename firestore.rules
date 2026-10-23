@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Health check endpoint for connection verification
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // User profile document
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['userId', 'email']) &&
+             data.keys().hasOnly(['userId', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.email is string && data.email.size() <= 256 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2048));
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming(), userId) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming(), userId) && incoming().userId == existing().userId && incoming().updatedAt == request.time;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Single-use QR activation tokens
+      function isValidActivationToken(data, tId) {
+        return data.keys().hasAll(['tokenId', 'ownerUid', 'targetId', 'name', 'role', 'code', 'status']) &&
+               data.keys().hasOnly(['tokenId', 'ownerUid', 'storeId', 'targetId', 'name', 'role', 'code', 'createdAt', 'status', 'usedAt', 'usedByDeviceId']) &&
+               data.tokenId == tId &&
+               data.ownerUid == request.auth.uid &&
+               (data.role == 'employee' || data.role == 'partner') &&
+               (data.status == 'active' || data.status == 'used' || data.status == 'revoked') &&
+               data.name is string && data.name.size() <= 128 &&
+               data.code is string && data.code.size() <= 32;
+      }
+
+      match /tokens/{tokenId} {
+        allow get: if isValidId(tokenId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(tokenId) && isValidActivationToken(incoming(), tokenId) && incoming().createdAt == request.time;
+        allow update: if isValidId(tokenId) && (
+          isOwner(userId) ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'usedAt', 'usedByDeviceId']) && existing().status == 'active' && incoming().status == 'used')
+        );
+        allow delete: if isOwner(userId) && isValidId(tokenId);
+      }
+
+      // User's store synchronization documents
+      function isValidStore(data, uId, sId) {
+        return data.keys().hasAll(['userId', 'storeId', 'deviceId', 'version', 'data']) &&
+               data.keys().hasOnly(['userId', 'storeId', 'storeName', 'storeType', 'deviceId', 'deviceName', 'version', 'prodsCount', 'salesCount', 'custCount', 'buysCount', 'expsCount', 'data', 'updatedAt']) &&
+               data.userId == uId &&
+               data.storeId == sId &&
+               data.deviceId is string && data.deviceId.size() > 0 && data.deviceId.size() <= 128 &&
+               data.version is number && data.version >= 0 &&
+               data.data is map &&
+               (!('storeName' in data) || (data.storeName is string && data.storeName.size() <= 100)) &&
+               (!('storeType' in data) || (data.storeType is string && data.storeType.size() <= 50)) &&
+               (!('deviceName' in data) || (data.deviceName is string && data.deviceName.size() <= 128)) &&
+               (!('prodsCount' in data) || data.prodsCount is number) &&
+               (!('salesCount' in data) || data.salesCount is number) &&
+               (!('custCount' in data) || data.custCount is number) &&
+               (!('buysCount' in data) || data.buysCount is number) &&
+               (!('expsCount' in data) || data.expsCount is number);
+      }
+
+      match /stores/{storeId} {
+        allow get, list: if isOwner(userId) || true; // Readable by authenticated devices
+        allow create: if isOwner(userId) && isValidId(storeId) && isValidStore(incoming(), userId, storeId) && incoming().updatedAt == request.time;
+        allow update: if isValidId(storeId) && isValidStore(incoming(), userId, storeId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().storeId == existing().storeId &&
+                         incoming().updatedAt == request.time;
+        allow delete: if isOwner(userId) && isValidId(storeId);
+      }
+
+      // Track connected devices
+      function isValidDevice(data, uId, dId) {
+        return data.keys().hasAll(['userId', 'deviceId']) &&
+               data.keys().hasOnly(['userId', 'deviceId', 'deviceName', 'userAgent', 'lastActive', 'createdAt']) &&
+               data.userId == uId &&
+               data.deviceId == dId &&
+               (!('deviceName' in data) || (data.deviceName is string && data.deviceName.size() <= 128)) &&
+               (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 512));
+      }
+
+      match /devices/{deviceId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(deviceId) && isValidDevice(incoming(), userId, deviceId) && incoming().createdAt == request.time && incoming().lastActive == request.time;
+        allow update: if isOwner(userId) && isValidId(deviceId) && isValidDevice(incoming(), userId, deviceId) && incoming().userId == existing().userId && incoming().deviceId == existing().deviceId && incoming().lastActive == request.time;
+        allow delete: if isOwner(userId) && isValidId(deviceId);
+      }
+
+      // Cloud backups
+      function isValidBackup(data, uId, bId) {
+        return data.keys().hasAll(['userId', 'backupId', 'data']) &&
+               data.keys().hasOnly(['userId', 'backupId', 'name', 'counts', 'data', 'createdAt']) &&
+               data.userId == uId &&
+               data.userId == request.auth.uid &&
+               data.backupId == bId &&
+               data.data is map &&
+               (!('name' in data) || (data.name is string && data.name.size() <= 128)) &&
+               (!('counts' in data) || data.counts is map);
+      }
+
+      match /backups/{backupId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(backupId) && isValidBackup(incoming(), userId, backupId) && incoming().createdAt == request.time;
+        allow update: if isOwner(userId) && isValidId(backupId) && isValidBackup(incoming(), userId, backupId) && incoming().userId == existing().userId && incoming().backupId == existing().backupId;
+        allow delete: if isOwner(userId) && isValidId(backupId);
+      }
+    }
+  }
+}

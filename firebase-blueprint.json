@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "StoreData": {
+      "title": "StoreData",
+      "description": "Real-time synchronized store database for cross-device sync",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "storeName": { "type": "string" },
+        "storeType": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "version": { "type": "number" },
+        "prodsCount": { "type": "number" },
+        "salesCount": { "type": "number" },
+        "custCount": { "type": "number" },
+        "buysCount": { "type": "number" },
+        "expsCount": { "type": "number" },
+        "data": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "storeId", "deviceId", "version", "data"]
+    },
+    "UserDevice": {
+      "title": "UserDevice",
+      "description": "Connected device tracking for the user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "lastActive": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "deviceId"]
+    },
+    "StoreBackup": {
+      "title": "StoreBackup",
+      "description": "Cloud store backup snapshot",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "backupId": { "type": "string" },
+        "name": { "type": "string" },
+        "counts": { "type": "object" },
+        "data": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "backupId", "data"]
+    },
+    "ActivationToken": {
+      "title": "ActivationToken",
+      "description": "Single-use permanent QR activation token for employees and partners",
+      "type": "object",
+      "properties": {
+        "tokenId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "storeId": { "type": "string" },
+        "targetId": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["employee", "partner"] },
+        "code": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "used", "revoked"] },
+        "usedAt": { "type": "string", "format": "date-time" },
+        "usedByDeviceId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tokenId", "ownerUid", "targetId", "name", "role", "code", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profile document"
+    },
+    "/users/{userId}/stores/{storeId}": {
+      "schema": { "$ref": "StoreData" },
+      "description": "Synchronized store data document for real-time cross-device updates"
+    },
+    "/users/{userId}/devices/{deviceId}": {
+      "schema": { "$ref": "UserDevice" },
+      "description": "Track connected user devices"
+    },
+    "/users/{userId}/backups/{backupId}": {
+      "schema": { "$ref": "StoreBackup" },
+      "description": "Store backup documents"
+    },
+    "/users/{userId}/tokens/{tokenId}": {
+      "schema": { "$ref": "ActivationToken" },
+      "description": "Single-use permanent QR activation tokens"
+    }
+  }
+}

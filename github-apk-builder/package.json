@@ -1,0 +1,14 @@
+{
+  "name": "shop-manager-apk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "إدارة المتجر - حزمة جاهزة لتوليد ملف APK تلقائياً بواسطة GitHub Actions",
+  "scripts": {
+    "build": "mkdir -p dist && cp index.html dist/index.html"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0"
+  }
+}

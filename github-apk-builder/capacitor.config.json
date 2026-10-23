@@ -1,0 +1,8 @@
+{
+  "appId": "com.shopmanager.app",
+  "appName": "إدارة المتجر",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

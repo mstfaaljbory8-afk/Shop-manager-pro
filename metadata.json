@@ -1,0 +1,6 @@
+{
+  "name": "Shop Manager Pro - إدارة المتجر",
+  "description": "نظام شامل لإدارة المتاجر والمخزون والمبيعات والمشتريات والديون والزبائن مع تسجيل الدخول بحساب Google والمزامنة الفورية السحابية عبر جميع أجهزتك.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
