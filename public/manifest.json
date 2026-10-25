@@ -1,0 +1,19 @@
+{
+  "short_name": "إدارة المتجر",
+  "name": "Shop Manager Pro - إدارة المتجر",
+  "description": "نظام شامل لإدارة المتاجر والمخزون والمبيعات والمشتريات والديون والزبائن مع المزامنة الفورية السحابية",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "64x64 192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0d9488",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "ar",
+  "dir": "rtl"
+}

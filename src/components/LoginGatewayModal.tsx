@@ -257,6 +257,16 @@ export const LoginGatewayModal: React.FC<Props> = ({
                 )}
                 <span>{isAr ? 'تسجيل الدخول بحساب Google (المالك)' : 'Sign In with Google (Owner)'}</span>
               </button>
+
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full py-3 px-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white font-medium text-xs transition active:scale-98 border border-slate-700/50"
+                >
+                  {isAr ? 'المتابعة كمتجر محلي (بدون تسجيل حساب)' : 'Continue in Local Mode (Offline)'}
+                </button>
+              )}
             </div>
           )}
 

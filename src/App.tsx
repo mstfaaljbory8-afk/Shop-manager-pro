@@ -14,6 +14,7 @@ export default function App() {
   const [syncState, setSyncState] = useState<SyncState>(syncManager.state);
   const [currentTab, setCurrentTab] = useState<string>('home');
   const [lang, setLang] = useState<'ar' | 'en'>('ar');
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isDevicesOpen, setIsDevicesOpen] = useState(false);
   const [isBackupsOpen, setIsBackupsOpen] = useState(false);
   const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
@@ -82,7 +83,7 @@ export default function App() {
     };
 
     win.__firebaseOpenLoginGateway = () => {
-      setIsSwitchAccountOpen(true);
+      setIsLoginModalOpen(true);
     };
 
     win.__firebaseOpenQrModal = (role: 'employee' | 'partner', id: string, name: string) => {
@@ -95,10 +96,29 @@ export default function App() {
       handleTriggerBack();
     };
 
+    // Helper to hook engine navigation so BottomNavBar active tab stays synchronized
+    const hookNavigation = () => {
+      if (win.openTab && !win.__tabHooked) {
+        const origOpenTab = win.openTab;
+        win.openTab = function (t: string) {
+          setCurrentTab(t);
+          origOpenTab.apply(this, arguments as any);
+        };
+        win.__tabHooked = true;
+      }
+      if (win.goBack && !win.__goBackHooked) {
+        const origGoBack = win.goBack;
+        win.goBack = function () {
+          origGoBack.apply(this, arguments as any);
+          setCurrentTab(win.TAB || 'home');
+        };
+        win.__goBackHooked = true;
+      }
+    };
+
     // 3. Listen to incoming real-time cross-device updates
     const unsubRemote = syncManager.onRemoteData((remoteData, meta) => {
       if (win.db && remoteData) {
-        console.log('[Real-time Sync] Merging incoming cloud update from:', meta.deviceName);
         win.db = Object.assign(win.db, remoteData);
         if (win.flushSave) win.flushSave();
         if (win.render) win.render();
@@ -113,13 +133,20 @@ export default function App() {
       }
     });
 
-    // 4. Tab change listener from shop-engine
+    // 4. Tab change listener from shop-engine or popstate
     const handleTabChangeEvent = (e: CustomEvent<{ tab: string }>) => {
       if (e.detail && e.detail.tab) {
         setCurrentTab(e.detail.tab);
       }
     };
     window.addEventListener('shop:tabchange' as any, handleTabChangeEvent);
+
+    const handlePopstate = () => {
+      setTimeout(() => {
+        setCurrentTab(win.TAB || 'home');
+      }, 50);
+    };
+    window.addEventListener('popstate', handlePopstate);
 
     // 5. Language sync listener
     const handleLangChangeEvent = (e: CustomEvent<{ lang: 'ar' | 'en' }>) => {
@@ -145,7 +172,7 @@ export default function App() {
       script.src = '/shop-engine/shop-engine.js';
       script.async = true;
       script.onload = () => {
-        console.log('Shop engine booted and synchronized with Firebase.');
+        hookNavigation();
         if (win.TAB) {
           setCurrentTab(win.TAB);
         }
@@ -156,12 +183,15 @@ export default function App() {
         }
       };
       document.body.appendChild(script);
+    } else {
+      hookNavigation();
     }
 
     return () => {
       unsubState();
       unsubRemote();
       window.removeEventListener('shop:tabchange' as any, handleTabChangeEvent);
+      window.removeEventListener('popstate', handlePopstate);
       window.removeEventListener('shop:langchange' as any, handleLangChangeEvent);
       if (exitToastTimerRef.current) {
         clearTimeout(exitToastTimerRef.current);
@@ -170,7 +200,7 @@ export default function App() {
   }, []);
 
   const isAnyModalOpen =
-    !syncManager.isAuthenticated() ||
+    isLoginModalOpen ||
     isSwitchAccountOpen ||
     isDevicesOpen ||
     isBackupsOpen ||
@@ -206,6 +236,7 @@ export default function App() {
     if (win.TAB && win.TAB !== 'home') {
       if (win.goBack) {
         win.goBack();
+        setCurrentTab(win.TAB || 'home');
       } else {
         win.TAB = 'home';
         setCurrentTab('home');
@@ -217,16 +248,13 @@ export default function App() {
     // At root ('home'): Double-tap back detector
     const now = Date.now();
     if (now - lastBackPressTimeRef.current < 1000) {
-      // Second tap within 1000ms -> Exit!
+      // Second tap within 1000ms -> Exit confirmation modal
       if (exitToastTimerRef.current) {
         clearTimeout(exitToastTimerRef.current);
         exitToastTimerRef.current = null;
       }
       setExitToastVisible(false);
       setIsExitModalOpen(true);
-      try {
-        window.close();
-      } catch (e) {}
     } else {
       // First tap -> show toast bubble for exactly 1 second (1000ms)
       lastBackPressTimeRef.current = now;
@@ -242,17 +270,18 @@ export default function App() {
   };
 
   const handleSelectTab = (tab: string) => {
+    setCurrentTab(tab);
     const win = window as any;
     if (win.openTab) {
       win.openTab(tab);
     } else {
       win.TAB = tab;
-      setCurrentTab(tab);
       if (win.render) win.render();
     }
   };
 
   const handleLoginSuccess = (role: 'owner' | 'employee' | 'partner', name?: string) => {
+    setIsLoginModalOpen(false);
     setIsSwitchAccountOpen(false);
     const win = window as any;
 
@@ -296,32 +325,27 @@ export default function App() {
       className="min-h-screen bg-[var(--bg)] text-[var(--tx)] flex flex-col font-sans transition-colors duration-300 relative selection:bg-teal-500/30"
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
-      {/* Real-time Cloud Synchronization Top Header (Visible only when authenticated) */}
-      {isAuthenticated && (
-        <SyncHeader
-          syncState={syncState}
-          lang={lang}
-          currentTab={currentTab}
-          onGoBack={handleTriggerBack}
-          onOpenLoginGateway={() => setIsSwitchAccountOpen(true)}
-          onOpenDevices={() => setIsDevicesOpen(true)}
-          onOpenBackups={() => setIsBackupsOpen(true)}
-          onOpenDownloads={() => setIsDownloadsOpen(true)}
-          onForceSync={() => {
-            const win = window as any;
-            if (win.db) {
-              syncManager.forceSync(win.db);
-            }
-          }}
-          onSignOut={() => syncManager.signOut()}
-        />
-      )}
+      {/* Real-time Cloud Synchronization Top Header (Always accessible with live sync or local offline state) */}
+      <SyncHeader
+        syncState={syncState}
+        lang={lang}
+        currentTab={currentTab}
+        onGoBack={handleTriggerBack}
+        onOpenLoginGateway={() => setIsLoginModalOpen(true)}
+        onOpenDevices={() => setIsDevicesOpen(true)}
+        onOpenBackups={() => setIsBackupsOpen(true)}
+        onOpenDownloads={() => setIsDownloadsOpen(true)}
+        onForceSync={() => {
+          const win = window as any;
+          if (win.db) {
+            syncManager.forceSync(win.db);
+          }
+        }}
+        onSignOut={() => syncManager.signOut()}
+      />
 
-      {/* Shop Manager Native Engine Containers: always present in DOM so script doesn't crash on missing elements, but strictly hidden if unauthenticated */}
-      <main
-        className="flex-1 transition-all duration-300 pb-28"
-        style={{ display: isAuthenticated ? 'block' : 'none' }}
-      >
+      {/* Shop Manager Native Engine Containers: always present and active in DOM */}
+      <main className="flex-1 transition-all duration-300 pb-28">
         <div className="w">
           <h1 id="hd"></h1>
           <div id="tb"></div>
@@ -331,18 +355,16 @@ export default function App() {
         </div>
       </main>
 
-      <div id="ovl" style={{ display: isAuthenticated ? 'block' : 'none' }}></div>
+      <div id="ovl"></div>
 
       {/* Floating Bottom Navigation Bar for Ergonomic One-Thumb Navigation */}
-      {isAuthenticated && (
-        <BottomNavBar
-          currentTab={currentTab}
-          lang={lang}
-          isEmployee={isEmployee}
-          isModalActive={isAnyModalOpen}
-          onSelectTab={handleSelectTab}
-        />
-      )}
+      <BottomNavBar
+        currentTab={currentTab}
+        lang={lang}
+        isEmployee={isEmployee}
+        isModalActive={isAnyModalOpen}
+        onSelectTab={handleSelectTab}
+      />
 
       {/* Floating Exit Toast Bubble (Lasts 1 second on single back press at root) */}
       <ExitToast visible={exitToastVisible} lang={lang} />
@@ -354,26 +376,17 @@ export default function App() {
         onRestart={() => setIsExitModalOpen(false)}
       />
 
-      {/* MANDATORY AUTHENTICATION GUARD: If not logged in, show non-dismissable full-screen Login Gateway */}
-      {!isAuthenticated && (
-        <LoginGatewayModal
-          isOpen={true}
-          lang={lang}
-          canDismiss={false}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      )}
-
-      {/* Switch Account Modal (when already logged in) */}
-      {isAuthenticated && (
-        <LoginGatewayModal
-          isOpen={isSwitchAccountOpen}
-          lang={lang}
-          canDismiss={true}
-          onClose={() => setIsSwitchAccountOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      )}
+      {/* Login Gateway / Switch Account Modal */}
+      <LoginGatewayModal
+        isOpen={isLoginModalOpen || isSwitchAccountOpen}
+        lang={lang}
+        canDismiss={true}
+        onClose={() => {
+          setIsLoginModalOpen(false);
+          setIsSwitchAccountOpen(false);
+        }}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Single-Use QR Code Generation Modal for Owner */}
       {isAuthenticated && qrTarget && (

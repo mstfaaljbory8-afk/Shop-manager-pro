@@ -78,11 +78,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   };
 
   if (isPermissionIssue) {
-    console.error('Firestore Error: ', JSON.stringify(errInfo));
-    throw new Error(JSON.stringify(errInfo));
+    console.warn(`[Firestore Permission Notice on ${path}]:`, rawMsg);
   } else {
-    console.warn(`[Firestore ${operationType} warning on ${path}]:`, rawMsg);
+    // Graceful offline or retry notice
   }
+  return errInfo;
 }
 
 // Gentle asynchronous check that does not force server roundtrip or throw uncaught errors

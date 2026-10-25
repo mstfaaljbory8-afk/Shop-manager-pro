@@ -69,7 +69,7 @@ export const BottomNavBar: React.FC<Props> = ({
         },
         {
           id: 'cust',
-          label: isAr ? 'الديون' : 'Debts',
+          label: isAr ? 'الزبائن' : 'Customers',
           icon: Users,
         },
         {
